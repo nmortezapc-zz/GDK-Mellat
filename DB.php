@@ -11,7 +11,7 @@ class DataBase extends PDO
 			);
 
 		try {
-			$this->dbh = new PDO($dsn, 'root', 'morteza3120', $options);
+			$this->dbh = new PDO($dsn, 'root', '', $options);
 			$this->dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 			$this->dbh->exec("SET character_set_results=utf8;");
         	$this->dbh->exec("SET character_set_client=utf8;");
@@ -24,7 +24,7 @@ class DataBase extends PDO
 		}
 	}
 
-	public function read($tableName, $fields = array(), $where = array(), $andOr = '', $options = '')
+	public function read($tableName, $fields = array(), $where = array(), $operations = '=', $andOr = '', $options = '')
 	{
 		if ($this->dbh) {
 			if (count($fields) > 0) {
@@ -38,22 +38,42 @@ class DataBase extends PDO
 				$fieldsText = '*';
 			}
 
-			if (count($where) > 0) {
+			$whereArrayCount = count($where);
+
+			if ($whereArrayCount > 0) {
 				$whereText = 'WHERE (';
 
-				foreach ($where as $key => $value) {
-					$whereText .= '`' . $key . '` = :' . $key . ' ' . $andOr . ' ';
-				}
+				$andOrArray = explode('-', $andOr);
+				$andOrArrayCount = count($andOrArray);
 
-				if ($andOr == 'AND') {
-					$whereText = substr($whereText, 0, -5) . ')';
+				$operationsArray = explode('-', $operations);
+				$operationsArrayCount = count($operationsArray);
+
+				if ($andOr != '' && $andOrArrayCount == $whereArrayCount - 1 && $operationsArrayCount == $whereArrayCount) {
+
+					$i = 0; // for operations
+					$j = 0; // for AND OR
+
+					foreach ($where as $key => $value) {
+						$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . ' ' . (isset($andOrArray[$j]) ? $andOrArray[$j] : '') . ' ';
+						$i++;
+						$j++;
+					}
 				}
-				elseif ($andOr == 'OR') {
-					$whereText = substr($whereText, 0, -4) . ')';
+				elseif ($andOr == '' && $andOrArrayCount == $whereArrayCount && $operationsArrayCount == $whereArrayCount) {
+
+					$i = 0; // for operations
+
+					foreach ($where as $key => $value) {
+						$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . '  ';
+						$i++;
+					}
 				}
 				else {
-					$whereText = substr($whereText, 0, -2) . ')';
+					die();
 				}
+			
+				$whereText = substr($whereText, 0, -2) . ')';
 
 				if (strlen($options) > 0) {
 					$query = "SELECT {$fieldsText} FROM `{$tableName}` {$whereText} {$options}";
