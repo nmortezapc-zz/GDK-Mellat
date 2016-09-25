@@ -4,6 +4,22 @@ include("model/inc/config.php");
 $action = !empty($_GET['action']) ? $_GET['action'] : "";
 $primkey = $_GET['primkey'];
 $bizId = substr($primkey, 4);
+
+// create new object
+try {
+    $obj = new DataBase();
+} catch(Exception $e) {
+    echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+    exit();
+}
+
+
+$biz = $obj->read('ctg_bussinesses', array(), array('bid' => $bizId, 'primkey' => $primkey), '=-=', 'OR', '', 's');
+if (count($biz) == 0) {
+    safe_redirect($siteurl . "/404");
+}
+
+/*
 $query_primaryBiz = $conn->prepare("SELECT * FROM `ctg_bussinesses` WHERE `bid` = :bid OR `primkey` = :BizPrimary");
 $query_primaryBiz->bindValue(':bid', $bizId);
 $query_primaryBiz->bindValue(':BizPrimary', $primkey);
@@ -13,12 +29,23 @@ if ($query_primaryBiz->rowCount()) {
 } else {
     safe_redirect($siteurl . "/404");
 }
+*/
 
 if (rand(1, 10) == 4) $visitplus = 3;
 else $visitplus = 1;
+
+try {
+    $query_newVisit = $obj->update('ctg_bussinesses', array('visits' => 'visits+' . $visitplus), array('bid' => $biz->bid), '=');
+} catch(Exception $e) {
+    echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+    exit();
+}
+
+/*
 $query_newVisit = $conn->prepare("UPDATE `ctg_bussinesses` SET visits = visits+ $visitplus WHERE bid = :bid LIMIT 1");
 $query_newVisit->bindValue(':bid', $biz->bid);
 $query_newVisit->execute();
+*/
 
 $ctname = locdata($biz->city)->local_name;
 
@@ -42,7 +69,6 @@ if (strpos($biz->timeline, ':') !== false) {
 
 
 if ($action == "addPic") {
-  $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/photos/افزودن-عکس-'.str_replace(" ", "-", $biz->name).'" />';
 
     $ptitle = "افزودن عکس به " . $biz->name . " - " . $ctname . " - سیتی گرام";
     $pdes = "در " . $ptitle . " می توانید به صفحه کسب و کار مورد نظر خود عکس اضافه کنید .";
@@ -52,11 +78,34 @@ if ($action == "addPic") {
 
     if ($logged) {
         // USER FAV CATS
+        
+        $query_CheckPreviousFav = $obj->read('ctg_usersFavCats', array(), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND', '', 's');
+
+        /*
         $query_CheckPreviousFav = $conn->prepare('SELECT * FROM `ctg_usersFavCats` WHERE `uid`= :uid AND `cid` = :cid ');
         $query_CheckPreviousFav->bindValue(':uid', $user->user_id);
         $query_CheckPreviousFav->bindValue(':cid', $biz->subcat);
         $query_CheckPreviousFav->execute();
+        */
+       
+        if (count($query_CheckPreviousFav) == 0) {
+            try {
+                $query_AddFavCat = $obj->create('ctg_usersFavCats', array('uid' => $user->user_id, 'cid' => $biz->subcat, '1' => 1));
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+        }
+        else {
+            try {
+                $query_UpdateFavCat = $obj->update('ctg_usersFavCats', array('visits' => 'visits+1'), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND');
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+        }
 
+        /*
         if ($query_CheckPreviousFav->rowCount() == 0) {
             $query_AddFavCat = $conn->prepare('INSERT INTO `ctg_usersFavCats` VALUES (:uid,:cid,1) ');
             $query_AddFavCat->bindValue(':uid', $user->user_id);
@@ -68,6 +117,7 @@ if ($action == "addPic") {
             $query_UpdateFavCat->bindValue(':cid', $biz->subcat);
             $query_UpdateFavCat->execute();
         }
+        */
     } else {
         safe_redirect($siteurl . "/page/auth/loginAndRegister/");
     }
@@ -184,7 +234,7 @@ if ($action == "addPic") {
         <div class="page-top-info container" style="line-height:auto">
             <div class="row">
                 <div class="col-md-4 col-xs-12 col-sm-3 pull-left" style="text-align:left;">
-                    <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "-", $biz->name); ?>"
+                    <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "_", $biz->name); ?>"
                        class="btn3d btn-danger btn-md pb5"><i class="fa fa-photo ml10"></i> تصاویر</a>
                 </div>
                 <div class="col-md-8 col-xs-12" style="text-align:right;">
@@ -251,7 +301,6 @@ if ($action == "addPic") {
     <br/>
 
 <? } else if ($action == "photos") {
-$canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/photos/گالری-عکس-'.str_replace(" ", "-", $biz->name).'" />';
 
     $ptitle = "تصاویر " . $biz->name . " - " . $ctname . " - سیتی گرام";
     $pdes = "در " . $ptitle . " می توانید به صفحه کسب و کار مورد نظر خود عکس اضافه کنید .";
@@ -261,21 +310,45 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/p
 
     if ($logged) {
         // USER FAV CATS
+        
+        $query_CheckPreviousFav = $obj->read('ctg_usersFavCats', array(), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND', '', 's');
+
+        /*
         $query_CheckPreviousFav = $conn->prepare('SELECT * FROM `ctg_usersFavCats` WHERE `uid`= :uid AND `cid` = :cid ');
         $query_CheckPreviousFav->bindValue(':uid', $user->user_id);
         $query_CheckPreviousFav->bindValue(':cid', $biz->subcat);
         $query_CheckPreviousFav->execute();
+        */
+       
+        if (count($query_CheckPreviousFav) == 0) {
+            try {
+                $query_AddFavCat = $obj->create('ctg_usersFavCats', array('uid' => $user->user_id, 'cid' => $biz->subcat, '1' => 1));
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+            
 
-        if ($query_CheckPreviousFav->rowCount() == 0) {
+            /*
             $query_AddFavCat = $conn->prepare('INSERT INTO `ctg_usersFavCats` VALUES (:uid,:cid,1) ');
             $query_AddFavCat->bindValue(':uid', $user->user_id);
             $query_AddFavCat->bindValue(':cid', $biz->subcat);
             $query_AddFavCat->execute();
+            */
         } else {
+            try {
+                $query_UpdateFavCat = $obj->update('ctg_usersFavCats', array('visits' => 'visits+1'), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND');
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+
+            /*
             $query_UpdateFavCat = $conn->prepare('UPDATE `ctg_usersFavCats` SET visits = visits+1 WHERE `uid`= :uid AND `cid` = :cid ');
             $query_UpdateFavCat->bindValue(':uid', $user->user_id);
             $query_UpdateFavCat->bindValue(':cid', $biz->subcat);
             $query_UpdateFavCat->execute();
+            */
         }
     }
 
@@ -295,16 +368,32 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/p
     $fileExists = checkExternalFile("http://citygramcdn.ir/" . urldecode($file));
     if (strlen($file) > 0) {
         if ($fileExists == 200) {
+
+            $addPic_check = $obj->read('ctg_photos', array(), array('address' => $file), '=', '', '', 's');
+
+            /*
             $addPic_check = $conn->prepare("SELECT * FROM `ctg_photos` WHERE address = :address ");
             $addPic_check->bindValue(':address', $file);
             $addPic_check->execute();
-            if ($addPic_check->rowCount() == 0) {
+            */
+           
+            if (count($addPic_check) == 0) {
+                try {
+                    $addPic = $obj->create('ctg_photos', array('byuid' => $user->user_id, 'bid' => $biz->bid, 'address' => $file, 'date' => $now));
+                } catch(Exception $e) {
+                    echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                    exit();
+                }
+                
+
+                /*
                 $addPic = $conn->prepare("INSERT INTO `ctg_photos`(`byuid`, `bid`, `address`, `date`) VALUES (:uid,:bid,:address,:date) ");
                 $addPic->bindValue(':uid', $user->user_id);
                 $addPic->bindValue(':bid', $biz->bid);
                 $addPic->bindValue(':address', $file);
                 $addPic->bindValue(':date', $now);
-                if ($addPic->execute()) {
+                */
+                if ($addPic === true) {
                     $addPicMessage = "<i class='fa fa-check green ml10'></i> تصویر با موفقیت درج شد .";
                 }
             } else {
@@ -319,10 +408,15 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/p
 
     $ftspp = 16;
     $start = ($page - 1) * $ftspp;
+
+    $query_counter = $obj->read('ctg_photos', array(), array('bid' => $biz->bid), '=', '', '', 's');
+
+    /*
     $query_counter = $conn->prepare("SELECT * FROM `ctg_photos` WHERE `bid` = :bid ");
     $query_counter->bindValue(':bid', $biz->bid);
     $query_counter->execute();
-    $count = $query_counter->rowCount();
+    */
+    $count = count($query_counter);
     $firstpage = $pervpage = $paged_others = $nextpage = $lastpage = $pageinfo = "";
 
     if ($count - $ftspp > 0) {
@@ -370,10 +464,14 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/p
         $pageinfo = '<div class="paged-link-info">&raquo; صفحه: ' . $page . ' از ' . $paged_total . '</div>';
     }
 
+    $query_pics = $obj->read('ctg_photos', array(), array('bid' => $biz->bid), '=', '', "LIMIT {$start}, {$ftspp}", 'm');
+
+    /*
     $query_pics = $conn->prepare("SELECT * FROM `ctg_photos` WHERE `bid` = :bid LIMIT $start, $ftspp  ");
     $query_pics->bindValue('bid', $biz->bid);
     $query_pics->execute();
-    $pics = $query_pics->fetchAll();
+    */
+    $pics = $query_pics;
 
 
     $thispageScript = "
@@ -529,7 +627,6 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/p
     </div>
     <br/>
 <? } else if ($action == "navigate") {
-$canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/navigate/راهبری-به-'.str_replace(" ", "-", $biz->name).'" />';
 
     $ptitle = "راهبری به " . $biz->name . " - " . $ctname . " - سیتی گرام";
     $pdes = "از هر موقعیت جغرافیایی یا مکان فعلی شما با GPS به " . $biz->name . " برید ، میتوانید حتی وسیله راهبری را هم انتخاب کنید تا کوتاهترین مسیر محاسبه و به شما ارائه شود .";
@@ -551,22 +648,46 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/n
 
 
     if ($logged) {
-        // USER FAV CATS
+        // USER FAV CATS 
+        
+        $query_CheckPreviousFav = $obj->read('ctg_usersFavCats', array(), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND', '', 's');
+
+        /*
         $query_CheckPreviousFav = $conn->prepare('SELECT * FROM `ctg_usersFavCats` WHERE `uid`= :uid AND `cid` = :cid ');
         $query_CheckPreviousFav->bindValue(':uid', $user->user_id);
         $query_CheckPreviousFav->bindValue(':cid', $biz->subcat);
         $query_CheckPreviousFav->execute();
+        */
+        if (count($query_CheckPreviousFav) == 0) {
 
-        if ($query_CheckPreviousFav->rowCount() == 0) {
+            try {
+                $query_AddFavCat = $obj->create('ctg_usersFavCats', array('uid' => $user->user_id, 'cid' => $biz->subcat, '1' => 1));
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+
+            /*
             $query_AddFavCat = $conn->prepare('INSERT INTO `ctg_usersFavCats` VALUES (:uid,:cid,1) ');
             $query_AddFavCat->bindValue(':uid', $user->user_id);
             $query_AddFavCat->bindValue(':cid', $biz->subcat);
             $query_AddFavCat->execute();
+            */
         } else {
+
+            try {
+                $query_UpdateFavCat = $obj->update('ctg_usersFavCats', array('visits' => 'visits+2'), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND');
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+
+            /*
             $query_UpdateFavCat = $conn->prepare('UPDATE `ctg_usersFavCats` SET visits = visits+2 WHERE `uid`= :uid AND `cid` = :cid ');
             $query_UpdateFavCat->bindValue(':uid', $user->user_id);
             $query_UpdateFavCat->bindValue(':cid', $biz->subcat);
             $query_UpdateFavCat->execute();
+            */
         }
     }
 
@@ -879,10 +1000,17 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/n
                         <option value="0">انتخاب کنید ...</option>
                         <?
                         if ($logged) {
+
+                            $query_userPlaces = $obj->read('ctg_usersPlaces', array(), array('uid' => $user->user_id), '=', '', '', 'm');
+
+                            /*
                             $query_userPlaces = $conn->prepare("SELECT * FROM `ctg_usersPlaces` WHERE `uid` = :uid ");
                             $query_userPlaces->bindValue(':uid', $user->user_id);
                             $query_userPlaces->execute();
-                            $userPlaces = $query_userPlaces->fetchAll();
+                            */
+                           
+                            $userPlaces = $query_userPlaces;
+
                             foreach ($userPlaces as $userPlace) { ?>
                                 <option data-lat="<?= $userPlace['lng']; ?>" data-lng="<?= $userPlace['lat']; ?>"
                                         value="<?= $userPlace['id']; ?>"><?= $userPlace['title']; ?></option>
@@ -926,8 +1054,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/n
     <br/>
 
 <? } else {
-	$missTyping = fa2enString($biz->name) ;
-$canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'.str_replace(" ", "-", $biz->name).'" />';
+    $missTyping = fa2enString($biz->name) ;
     $ptitle = $biz->name . " - " . $ctname . " - سیتی گرام";
     $pdes = $biz->biz_des . " - آدرس : " . $biz->address . "- شماره تماس :" . $biz->phone;
     $pkeywords = $biz->name . ",سیتی گرام,صفحه کسب و کارهای سیتی گرام,".$missTyping;
@@ -938,30 +1065,60 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
 
     if ($logged) {
         // USER FAV CATS
+        
+        $query_CheckPreviousFav = $obj->read('ctg_usersFavCats', array(), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND', '', 's');
+
+        /*
         $query_CheckPreviousFav = $conn->prepare('SELECT * FROM `ctg_usersFavCats` WHERE `uid`= :uid AND `cid` = :cid ');
         $query_CheckPreviousFav->bindValue(':uid', $user->user_id);
         $query_CheckPreviousFav->bindValue(':cid', $biz->subcat);
         $query_CheckPreviousFav->execute();
+        */
+        if (count($query_CheckPreviousFav) == 0) {
 
-        if ($query_CheckPreviousFav->rowCount() == 0) {
+            try {
+                $query_AddFavCat = $obj->create('ctg_usersFavCats', array('uid' => $user->user_id, 'cid' => $biz->subcat, '1' => 1));
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+
+            /*
             $query_AddFavCat = $conn->prepare('INSERT INTO `ctg_usersFavCats` VALUES (:uid,:cid,1) ');
             $query_AddFavCat->bindValue(':uid', $user->user_id);
             $query_AddFavCat->bindValue(':cid', $biz->subcat);
             $query_AddFavCat->execute();
+            */
         } else {
+
+            try {
+                $query_UpdateFavCat = $obj->update('ctg_usersFavCats', array('visits' => 'visits+1'), array('uid' => $user->user_id, 'cid' => $biz->subcat), '=-=', 'AND');
+            } catch(Exception $e) {
+                echo '<h3>' . $e->getMessage() . '</h3>' . PHP_EOL;
+                exit();
+            }
+
+            /*
             $query_UpdateFavCat = $conn->prepare('UPDATE `ctg_usersFavCats` SET visits = visits+1 WHERE `uid`= :uid AND `cid` = :cid ');
             $query_UpdateFavCat->bindValue(':uid', $user->user_id);
             $query_UpdateFavCat->bindValue(':cid', $biz->subcat);
             $query_UpdateFavCat->execute();
+            */
         }
     }
 
 
     //Coments Count
+    
+    $query_pcms = $obj->read('ctg_comments', array(), array('bid' => $biz->bid, 'activeperm' => 1, 'answerKind' => 'prdc'), '=-=-<>', 'AND-AND', 'ORDER BY date DESC', 'm');
+
+    /*
     $query_pcms = $conn->prepare('SELECT * FROM ctg_comments WHERE bid = :bid AND activeperm = 1 AND answerKind <> "prdc" ORDER BY date DESC ');
     $query_pcms->bindValue(':bid', $biz->bid);
     $query_pcms->execute();
-    $bizComments = $query_pcms->fetchAll();
+    */
+   
+    $bizComments = $query_pcms;
     $bizCommentsList = "";
     foreach ($bizComments as $pcomment) {
         $biz = bizdata($pcomment['bid']);
@@ -1049,23 +1206,32 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                             <? } else {
 
                                 // Check If user Followed Business
+                                
+                                $query_checkFollowed = $obj->read('ctg_follows', array(), array('uid' => $user->user_id, 'bid' => $biz->bid), '=-=', 'AND', '', 's');
+
+                                /*
                                 $query_checkFollowed = $conn->prepare("SELECT * FROM `ctg_follows` WHERE `uid` = :uid AND `bid` = :bid ");
                                 $query_checkFollowed->bindValue(":uid", $user->user_id);
                                 $query_checkFollowed->bindValue(":bid", $biz->bid);
                                 $query_checkFollowed->execute();
-                                if ($query_checkFollowed->rowCount() == 0) {
+                                */
+                                if (count($query_checkFollowed) == 0) {
                                     $FollowButton = '<a data-href="' . $siteurl . '/model/?key=' . encryptIt("doFollowBussiness_" . random_string(8)) . '&csrf_token=' . getCSRFToken() . '&bid=' . $biz->bid . '" rel="tooltip" data-res="#ctgAjaxLinkFollowResult" id="ctgAjaxLinkFollowResult" title="دنبال کردن" data-toggle="tooltip" date-placement="bottom" class="btn3d btn-primary btn-sm ctgAjaxLink"><i class="fa fa-bookmark"></i><i class="mr5 fa fa-plus green ssmall"></i></a>';
                                 } else {
                                     $FollowButton = '<a data-href="' . $siteurl . '/model/?key=' . encryptIt("doUnFollowBussiness_" . random_string(8)) . '&csrf_token=' . getCSRFToken() . '&bid=' . $biz->bid . '" rel="tooltip" data-res="#ctgAjaxLinkFollowResult" id="ctgAjaxLinkFollowResult" title="قطع دنبال کردن" data-toggle="tooltip" date-placement="bottom" class="btn3d btn-primary btn-sm ctgAjaxLink"><i class="fa fa-bookmark"></i><i class="mr5 fa fa-minus ssmall"></i></a>';
                                 }
 
                                 // Check If user liked Business
+                                
+                                $query_checkLiked = $obj->read('ctg_likes', array(), array('uid' => $user->user_id, 'bid' => $biz->bid), '=-=', 'AND', '', 's');
+
+                                /*
                                 $query_checkLiked = $conn->prepare("SELECT * FROM `ctg_likes` WHERE `uid` = :uid AND `bid` = :bid ");
                                 $query_checkLiked->bindValue(":uid", $user->user_id);
                                 $query_checkLiked->bindValue(":bid", $biz->bid);
                                 $query_checkLiked->execute();
-
-                                if ($query_checkLiked->rowCount() == 0) {
+                                */
+                                if (count($query_checkLiked) == 0) {
                                     $LikeButton = '<a data-href="' . $siteurl . '/model/?key=' . encryptIt("doLikeBussiness_" . random_string(8)) . '&csrf_token=' . getCSRFToken() . '&bid=' . $biz->bid . '" rel="tooltip" data-res="#ctgAjaxLinkLikeResult" id="ctgAjaxLinkLikeResult" title="پسند کردن" data-toggle="tooltip" date-placement="bottom" class="btn3d btn-danger btn-sm ctgAjaxLink"><i class="fa fa-heart"></i><i class="mr5 fa fa-plus green ssmall"></i></a>';
                                 } else {
                                     $LikeButton = '<a data-href="' . $siteurl . '/model/?key=' . encryptIt("doUnLikeBussiness_" . random_string(8)) . '&csrf_token=' . getCSRFToken() . '&bid=' . $biz->bid . '" rel="tooltip" data-res="#ctgAjaxLinkLikeResult" id="ctgAjaxLinkLikeResult" title="لغو پسند" data-toggle="tooltip" date-placement="bottom" class="btn3d btn-danger btn-sm ctgAjaxLink"><i class="fa fa-heart"></i><i class="mr5 fa fa-minus ssmall"></i></a>';
@@ -1074,14 +1240,14 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
 
                                 <a href="#onlineReservation" data-toggle="modal" class="btn3d btn-danger btn-md pb5"><i
                                         class="fa fa-shopping-bag ml10"></i> رزرو کردن</a>
-                                <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "-", $biz->name); ?>"
+                                <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "_", $biz->name); ?>"
                                    rel="tooltip" title="گالری عکس" data-toggle="tooltip" date-placement="bottom"
                                    class="btn3d btn-info btn-sm"><i class="fa fa-photo"></i> تصاویر</a>
                                 <?= $FollowButton; ?>
                                 <?= $LikeButton; ?>
                             <? }
                         } else { ?>
-                            <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "-", $biz->name); ?>"
+                            <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "_", $biz->name); ?>"
                                rel="tooltip" title="گالری عکس" data-toggle="tooltip" date-placement="bottom"
                                class="btn3d btn-danger btn-md"><i class="fa fa-photo"></i> تصاویر</a>
                         <? } ?>
@@ -1121,7 +1287,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                         <span class="ssmall"><?= $biz->address; ?></span>
                         <div class="row">
                             <div class="col-md-6 small">
-                                <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/navigate/راهبری-به-<?= str_replace(" ", "-", $biz->name); ?>"><i
+                                <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/navigate/راهبری_به_<?= str_replace(" ", "_", $biz->name); ?>"><i
                                         class="fa fa-map-marker"></i> راهبری به این مکان</a>
                             </div>
                             <div class="col-md-6 ssmall">
@@ -1159,7 +1325,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                                                         <div
                                                             class="avgsize"><?= html_entity_decode($bizComment['comment']); ?></div>
                                                         <a class="green lgsize mt5"
-                                                           href="<?= $siteurl; ?>/profile/<?= $bizComment['user']; ?>/<?= str_replace(" ", "-", $cmUser->realname); ?>"
+                                                           href="<?= $siteurl; ?>/profile/<?= $bizComment['user']; ?>/<?= str_replace(" ", "_", $cmUser->realname); ?>"
                                                            target="_blank">
                                                             <small><?= $cmUser->realname; ?></small>
                                                         </a>
@@ -1379,7 +1545,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                     <div class="mt15 panel panel-default bt-rd4">
                         <div class="panel-body">
                             اولین نظر :
-                            <a href="<?= $siteurl; ?>/profile/<?= $biz->first_comment; ?>/<?= str_replace(" ", "-", $fcUser->realname); ?>"
+                            <a href="<?= $siteurl; ?>/profile/<?= $biz->first_comment; ?>/<?= str_replace(" ", "_", $fcUser->realname); ?>"
                                class="mr5 red avgsize">
                                 <i class="fa llgsize fa-paw ml5"></i> <?= $fcUser->realname; ?>
                             </a>
@@ -1407,17 +1573,22 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
 
                     <div class="carousel-inner">
                         <?php
+
+                        $query_pics = $obj->read('ctg_photos', array('address'), array('bid' => $biz->bid), '=', '', 'ORDER BY RAND() LIMIT 8', 'm');
+
+                        /*
                         $query_pics = $conn->prepare("SELECT address FROM `ctg_photos` WHERE `bid` = :bid ORDER BY RAND() LIMIT 8");
                         $query_pics->bindValue(':bid', $biz->bid);
                         $query_pics->execute();
-                        $userPics = $query_pics->fetchAll();
+                        */
+                        $userPics = $query_pics;
                         $pidId = 1;
                         if (count($userPics) > 0) {
                             foreach ($userPics as $userPic) {
                                 ?>
                                 <div class="<? if ($pidId == 1) echo 'active ';; ?>item"
                                      data-slide-number="<?= $pidId; ?>">
-                                    <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری-عکس-<?= str_replace(" ", "-", $biz->name); ?>"><img
+                                    <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "_", $biz->name); ?>"><img
                                             class="rad5"
                                             src="http://citygramcdn.ir/bphoto/<?= urlencode(imageEncrypt($userPic['address'] . ':::16:1')); ?>/360.ctg"
                                             alt="<?= $biz->name; ?>" style="width:360px;height:360px"></a>
@@ -1427,7 +1598,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                             }
                         } else { ?>
                             <div class="<? if ($pidId == 1) echo 'active ';; ?>item" data-slide-number="<?= $pidId; ?>">
-                                <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/addPic/افزودن-عکس-به-<?= str_replace(" ", "-", $biz->name); ?>"><img
+                                <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/addPic/افزودن_عکس_به_<?= str_replace(" ", "_", $biz->name); ?>"><img
                                         class="rad5"
                                         src="http://citygramcdn.ir/bphoto/<?= urlencode(imageEncrypt('usrUpload/text.png:" ":::1')); ?>/360.ctg"
                                         alt="بدون عکس" style="width:360px;height:360px"></a>
@@ -1447,7 +1618,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                 </div>
                 <div class="mt15 panel panel-default bt-rd4">
                     <div class="panel-body">
-                        <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری-عکس-<?= str_replace(" ", "-", $biz->name); ?>"
+                        <a href="<?= $siteurl; ?>/@<?= $primkey; ?>/photos/گالری_عکس_<?= str_replace(" ", "_", $biz->name); ?>"
                            class="mr5 grey avgsize">
                             <i class="fa llgsize fa-photo ml5"></i> مشاهده تمام تصاویر
                         </a>
@@ -1469,7 +1640,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                                     $bizPhoto = "usrUpload/text.png";
                                 }
                                 ?>
-                                <a href="<?= $siteurl; ?>/@<?= $bussinss['primkey'] == "" ? $bussinss['city'] . $bussinss['bid'] : $bussinss['primkey']; ?>/<?= str_replace(" ", "-", $bussinss['name']); ?>"
+                                <a href="<?= $siteurl; ?>/@<?= $bussinss['primkey'] == "" ? $bussinss['city'] . $bussinss['bid'] : $bussinss['primkey']; ?>/<?= str_replace(" ", "_", $bussinss['name']); ?>"
                                    title="<?= $bussinss['name']; ?>" target="_blank">
                                     <img
                                         src="http://citygramcdn.ir/bphoto/<?= urlencode(imageEncrypt($bizPhoto . ':" "::20')); ?>/18.ctg"
@@ -1480,13 +1651,13 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                         </div>
                     </div>
                 </div>
-				<div class="panel panel-default bt-rd4">
-					<div class="panel-body">
-					   با اشتباه تایپی :<br/>
-					   <?=$missTyping;?>
-					   <br/>
-					</div>
-			   </div>
+                <div class="panel panel-default bt-rd4">
+                    <div class="panel-body">
+                        با اشتباه تایپی :<br/>
+                        <?=$missTyping;?>
+                        <br/>
+                    </div>
+                </div>
 
                 اشتراک گذاری این صفحه در : <br/>
                 <div class="mt5 mb20">
@@ -1557,12 +1728,17 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                                 <?
                                 if ($logged) {
                                     $lastMonth = $now - (60 * 60 * 24 * 30);
+
+                                    $query_checkLastMonthStar = $obj->read('ctg_stars', array(), array('uid' => $user->user_id, 'bid' => $biz->bid, 'date' => $lastMonth), '=-=->', 'AND-AND', '', 's');
+
+                                    /*
                                     $query_checkLastMonthStar = $conn->prepare("SELECT * FROM `ctg_stars` WHERE `uid` = :uid AND bid = :bid AND date > :date ");
                                     $query_checkLastMonthStar->bindValue(":uid", $user->user_id);
                                     $query_checkLastMonthStar->bindValue(":bid", $biz->bid);
                                     $query_checkLastMonthStar->bindValue(":date", $lastMonth);
                                     $query_checkLastMonthStar->execute();
-                                    $lastStarAdded = $query_checkLastMonthStar->rowCount();
+                                    */
+                                    $lastStarAdded = count($query_checkLastMonthStar);
                                 } else {
                                     $lastStarAdded = 0;
                                 }
@@ -1667,10 +1843,15 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                             $actionName = "رزرو آنلاین";
                             $tmtext = "رزروی در <a href='" . $siteurl . "/@" . $bizPrimary . "' title='" . $biz->name . "'>" . $biz->name . "</a> ثبت کرد . ";
                             if ($tmline['data'] !== "0") {
+
+                                $rsv = $obj->read('ctg_reservation_menu', array('price', 'name'), array('rvid' => $tmline['data']), '=', '', '', 's');
+
+                                /*
                                 $query_reserve = $conn->prepare("SELECT price,name FROM `ctg_reservation_menu` WHERE rvid = :rvid ");
                                 $query_reserve->bindValue(':rvid', $tmline['data']);
                                 $query_reserve->execute();
                                 $rsv = $query_reserve->fetchObject();
+                                */
                                 $tmdata = '<p class="mt15"><i class="fa fa-usd ccc ml5"></i>  سفارش منوی ' . $rsv->name . ' به قیمت : ' . number_format($rsv->price) . ' تومان .</p>';
                             } else {
                                 $tmdata = '<p class="mt15"><i class="fa fa-usd ccc ml5"></i>  سفارش عمومی ثبت کرد .</p>';
@@ -1686,10 +1867,15 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                             $fa = "fa-bookmark";
                             $faClass = "bg-color3";
                             $actionName = "کسب مدال";
+
+                            $comp = $obj->read('ctg_compliments_cats', array('name'), array('ccid' => $tmline['bid']), '=', '', '', 's');
+
+                            /*
                             $query_complimt = $conn->prepare("SELECT name FROM `ctg_compliments_cats` WHERE `ccid` = :cmpid ");
                             $query_complimt->bindValue(':cmpid', $tmline['bid']);
                             $query_complimt->execute();
                             $comp = $query_complimt->fetchObject();
+                            */
                             $tmtext = $comp->name . " را به " . $puser->realname . " اعطا کرد .";
                             $tmdata = '<p class="mt15"><i class="fa fa-star gold" style="margin-top:2px"></i> ' . $tmline['data'] . '</p>';
                         } else if ($tmline['type'] == "download") {
@@ -1731,7 +1917,7 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                                         src="http://citygramcdn.ir/avatar/<?= urlencode(imageEncrypt($tavatar)); ?>/20.ctg"
                                         class="ml5" style="width:20px;height:20px;border-radius:2px;"/>
                                     <h2 style="font-size:15px"><a
-                                            href="<?= $siteurl; ?>/profile/<?= $usr->user_id; ?>/<?= str_replace(" ", "-", $usr->realname); ?>"
+                                            href="<?= $siteurl; ?>/profile/<?= $usr->user_id; ?>/<?= str_replace(" ", "_", $usr->realname); ?>"
                                             title="<?= $usr->realname; ?>"><?= $usr->realname; ?></a> <span
                                             class="small"><?= $tmtext; ?></span></h2>
                                     <?= $tmdata !== "" ? "<br/>" . $tmdata : ""; ?>
@@ -1815,10 +2001,15 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
                         <select name="kindOfReserve" id="kindOfReserve" class="noselect mr10" style="width:20%">
                             <option value="general" data-price="0" data-getgrice="0">عمومی</option>
                             <?php
+
+                            $reservationMenus = $obj->read('ctg_reservation_menu', array(), array('bid' => $biz->bid), '=', '', '', 'm');
+
+                            /*
                             $queryReserveMenu = $conn->prepare("SELECT * FROM `ctg_reservation_menu` WHERE `bid` = :bid ");
                             $queryReserveMenu->bindValue(':bid', $biz->bid);
                             $queryReserveMenu->execute();
                             $reservationMenus = $queryReserveMenu->fetchAll();
+                            */
                             foreach ($reservationMenus as $reservationMenu) { ?>
                                 <option data-price="<?= $reservationMenu['price']; ?>"
                                         data-getgrice="<?= $reservationMenu['getPrice']; ?>"
@@ -1852,4 +2043,5 @@ $canonical = '<link rel="canonical" href="http://www.citygram.ir/@'.$primkey.'/'
 <? } ?>
 <?php
 // $thispageScript = "";
-include_once("template/footer.php"); ?>
+include_once("template/footer.php");
+?>
