@@ -11,20 +11,19 @@ class DataBase extends PDO
 			);
 
 		try {
-			$this->dbh = new PDO($dsn, 'root', 'morteza3120', $options);
+			$this->dbh = new PDO($dsn, 'root', '', $options);
 			$this->dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 			$this->dbh->exec("SET character_set_results=utf8;");
-        	$this->dbh->exec("SET character_set_client=utf8;");
-        	$this->dbh->exec("SET character_set_connection=utf8;");
-        	$this->dbh->exec("SET character_set_database=utf8;");
-        	$this->dbh->exec("SET character_set_server=utf8;");
+        		$this->dbh->exec("SET character_set_client=utf8;");
+        		$this->dbh->exec("SET character_set_connection=utf8;");
+        		$this->dbh->exec("SET character_set_database=utf8;");
+        		$this->dbh->exec("SET character_set_server=utf8;");
 		} catch(PDOException $e) {
 			throw new Exception("Error: Connection Error!");
-			die();
 		}
 	}
 
-	public function read($tableName, $fields = array(), $where = array(), $andOr = '', $options = '')
+	public function read($tableName, $fields = array(), $where = array(), $operations = '=', $andOr = '', $options = '', $mode = 'm')
 	{
 		if ($this->dbh) {
 			if (count($fields) > 0) {
@@ -38,22 +37,42 @@ class DataBase extends PDO
 				$fieldsText = '*';
 			}
 
-			if (count($where) > 0) {
+			$whereArrayCount = count($where);
+
+			if ($whereArrayCount > 0) {
 				$whereText = 'WHERE (';
 
-				foreach ($where as $key => $value) {
-					$whereText .= '`' . $key . '` = :' . $key . ' ' . $andOr . ' ';
-				}
+				$andOrArray = explode('-', $andOr);
+				$andOrArrayCount = count($andOrArray);
 
-				if ($andOr == 'AND') {
-					$whereText = substr($whereText, 0, -5) . ')';
+				$operationsArray = explode('-', $operations);
+				$operationsArrayCount = count($operationsArray);
+
+				if ($andOr != '' && $andOrArrayCount == $whereArrayCount - 1 && $operationsArrayCount == $whereArrayCount) {
+
+					$i = 0; // for operations
+					$j = 0; // for AND OR
+
+					foreach ($where as $key => $value) {
+						$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . ' ' . (isset($andOrArray[$j]) ? $andOrArray[$j] : '') . ' ';
+						$i++;
+						$j++;
+					}
 				}
-				elseif ($andOr == 'OR') {
-					$whereText = substr($whereText, 0, -4) . ')';
+				elseif ($andOr == '' && $andOrArrayCount == $whereArrayCount && $operationsArrayCount == $whereArrayCount) {
+
+					$i = 0; // for operations
+
+					foreach ($where as $key => $value) {
+						$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . '  ';
+						$i++;
+					}
 				}
 				else {
-					$whereText = substr($whereText, 0, -2) . ')';
+					die();
 				}
+			
+				$whereText = substr($whereText, 0, -2) . ')';
 
 				if (strlen($options) > 0) {
 					$query = "SELECT {$fieldsText} FROM `{$tableName}` {$whereText} {$options}";
@@ -61,8 +80,6 @@ class DataBase extends PDO
 				elseif (strlen($options) == 0) {
 					$query = "SELECT {$fieldsText} FROM `{$tableName}` {$whereText}";
 				}
-
-				echo '"' . $query . '"' . '<br />';
 
 				$stmt = $this->dbh->prepare($query);
 
@@ -80,23 +97,34 @@ class DataBase extends PDO
 					$query = "SELECT {$fieldsText} FROM `{$tableName}`";
 				}
 
-				echo '"' . $query . '"' . '<br />';
-
 				$stmt = $this->dbh->prepare($query);
 				$stmt->execute();
 			}
 
 			if ($stmt && $stmt->rowCount() > 0) {
-				$resultArray = array();
+
+				switch ((string)$mode) {
+					case 's':
+						return $stmt->fetchObject();
+						break;
+					case 'm':
+						return $stmt->fetchAll();
+						break;
+					default:
+						exit();
+						break;
+				}
 				
+				/*
 				while ($row = $stmt->fetchObject()) {
 					$resultArray[] = $row;
 				}
 
 				return $resultArray;
+				*/
 			}
 			else {
-				throw new Exception("Error: Record Not Found!");
+				return array();
 			}
 		}
 	}
@@ -121,7 +149,7 @@ class DataBase extends PDO
 			$stmt->execute();
 
 			if ($stmt && $stmt->rowCount()) {
-				return 'Ba Movafaqiyat Ezafeh Shod';
+				return true;
 			}
 			else {
 				throw new Exception("Error: Khatayi Dar Darj Rokh Dadeh Ast!");
@@ -129,16 +157,45 @@ class DataBase extends PDO
 		}
 	}
 
-	public function delete($tableName, $where = array())
+	public function delete($tableName, $where = array(), $operations = '=', $andOr = '')
 	{
-		if ($this->dbh && count($where) > 0) {
+		$whereArrayCount = count($where);
+
+		if ($this->dbh && $whereArrayCount > 0) {
 			$whereText = 'WHERE (';
 
-			foreach ($where as $key => $value) {
-				$whereText .= '`' . $key . '` = :' . $key . ' AND ';
-			}
+			$andOrArray = explode('-', $andOr);
+			$andOrArrayCount = count($andOrArray);
 
-			$whereText = substr($whereText, 0, -5) . ')';
+			$operationsArray = explode('-', $operations);
+			$operationsArrayCount = count($operationsArray);
+
+			if ($andOr != '' && $andOrArrayCount == $whereArrayCount - 1 && $operationsArrayCount == $whereArrayCount) {
+
+				$i = 0; // for operations
+				$j = 0; // for AND OR
+
+				foreach ($where as $key => $value) {
+					$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . ' ' . (isset($andOrArray[$j]) ? $andOrArray[$j] : '') . ' ';
+					$i++;
+					$j++;
+				}
+			}
+			elseif ($andOr == '' && $andOrArrayCount == $whereArrayCount && $operationsArrayCount == $whereArrayCount) {
+
+				$i = 0; // for operations
+
+				foreach ($where as $key => $value) {
+					$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . '  ';
+					$i++;
+				}
+			}
+			else {
+				die();
+			}
+			
+			$whereText = substr($whereText, 0, -2) . ')';
+
 			$stmt = $this->dbh->prepare("DELETE FROM `{$tableName}` {$whereText}");
 
 			foreach ($where as $key => $value) {
@@ -156,24 +213,44 @@ class DataBase extends PDO
 		}
 	}
 
-	public function update($tableName, $update = array(), $where = array(), $andOr = '')
+	public function update($tableName, $update = array(), $where = array(), $operations = '=', $andOr = '')
 	{
-		if ($this->dbh && count($update) > 0 && count($where) > 0) {
+		$whereArrayCount = count($where);
+
+		if ($this->dbh && count($update) > 0 && $whereArrayCount > 0) {
 			$whereText = 'WHERE (';
 
-			foreach ($where as $key => $value) {
-				$whereText .= '`' . $key . '` = :' . $key . ' ' . $andOr . ' ';
-			}
+			$andOrArray = explode('-', $andOr);
+			$andOrArrayCount = count($andOrArray);
 
-			if ($andOr == 'AND') {
-				$whereText = substr($whereText, 0, -5) . ')';
+			$operationsArray = explode('-', $operations);
+			$operationsArrayCount = count($operationsArray);
+
+			if ($andOr != '' && $andOrArrayCount == $whereArrayCount - 1 && $operationsArrayCount == $whereArrayCount) {
+
+				$i = 0; // for operations
+				$j = 0; // for AND OR
+
+				foreach ($where as $key => $value) {
+					$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . ' ' . (isset($andOrArray[$j]) ? $andOrArray[$j] : '') . ' ';
+					$i++;
+					$j++;
+				}
 			}
-			elseif ($andOr == 'OR') {
-				$whereText = substr($whereText, 0, -4) . ')';
+			elseif ($andOr == '' && $andOrArrayCount == $whereArrayCount && $operationsArrayCount == $whereArrayCount) {
+
+				$i = 0; // for operations
+
+				foreach ($where as $key => $value) {
+					$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . '  ';
+					$i++;
+				}
 			}
 			else {
-				$whereText = substr($whereText, 0, -2) . ')';
+				die();
 			}
+			
+			$whereText = substr($whereText, 0, -2) . ')';
 
 			$updateText = '';
 
@@ -183,7 +260,6 @@ class DataBase extends PDO
 
 			$updateText = substr($updateText, 0, -3);
 
-			echo '"' . "UPDATE `{$tableName}` SET {$updateText} {$whereText}" . '"'; die();
 			$stmt = $this->dbh->prepare("UPDATE `{$tableName}` SET {$updateText} {$whereText}");
 
 			foreach ($update as $key => $value) {
@@ -201,6 +277,105 @@ class DataBase extends PDO
 			}
 			else {
 				throw new Exception("Error: Khatayi Dar Update Rokh Dade Ast!");
+			}
+		}
+	}
+
+	public function generalRead($tableName, $preText = '', $fields, $where = array(), $operations = '=', $andOr = '', $options = '', $mode = 'm')
+	{
+		if ($this->dbh && strlen($fields) > 0) {
+			$whereArrayCount = count($where);
+
+			if ($whereArrayCount > 0) {
+				$whereText = 'WHERE (';
+
+				$andOrArray = explode('-', $andOr);
+				$andOrArrayCount = count($andOrArray);
+
+				$operationsArray = explode('-', $operations);
+				$operationsArrayCount = count($operationsArray);
+
+				if ($andOr != '' && $andOrArrayCount == $whereArrayCount - 1 && $operationsArrayCount == $whereArrayCount) {
+
+					$i = 0; // for operations
+					$j = 0; // for AND OR
+
+					foreach ($where as $key => $value) {
+						$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . ' ' . (isset($andOrArray[$j]) ? $andOrArray[$j] : '') . ' ';
+						$i++;
+						$j++;
+					}
+				}
+				elseif ($andOr == '' && $andOrArrayCount == $whereArrayCount && $operationsArrayCount == $whereArrayCount) {
+
+					$i = 0; // for operations
+
+					foreach ($where as $key => $value) {
+						$whereText .= '`' . $key . '` ' . $operationsArray[$i] . ' :' . $key . '  ';
+						$i++;
+					}
+				}
+				else {
+					die();
+				}
+			
+				$whereText = substr($whereText, 0, -2) . ')';
+
+				$query = (strlen($preText) > 0 ? $preText . ' ' : '');
+
+				if (strlen($options) > 0) {
+					$query .= "SELECT {$fields} FROM `{$tableName}` {$whereText} {$options}";
+				}
+				elseif (strlen($options) == 0) {
+					$query .= "SELECT {$fields} FROM `{$tableName}` {$whereText}";
+				}
+
+				$stmt = $this->dbh->prepare($query);
+
+				foreach ($where as $key => $value) {
+					$stmt->bindValue(':' . $key, $value);
+				}
+
+				$stmt->execute();
+			}
+			else {
+				$query = (strlen($preText) > 0 ? $preText . ' ' : '');
+
+				if (strlen($options) > 0) {
+					$query .= "SELECT {$fields} FROM `{$tableName}` {$options}";
+				}
+				elseif (strlen($options) == 0) {
+					$query .= "SELECT {$fields} FROM `{$tableName}`";
+				}
+
+				$stmt = $this->dbh->prepare($query);
+				$stmt->execute();
+			}
+
+			if ($stmt && $stmt->rowCount() > 0) {
+
+				switch ((string)$mode) {
+					case 's':
+						return $stmt->fetchObject();
+						break;
+					case 'm':
+						return $stmt->fetchAll();
+						break;
+					default:
+						exit();
+						break;
+				}
+				
+				/*
+				while ($row = $stmt->fetchObject()) {
+					$resultArray[] = $row;
+				}
+
+				return $resultArray;
+				*/
+			}
+			else {
+				return array();
 			}
 		}
 	}
